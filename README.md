@@ -1,45 +1,93 @@
-# DriveCoach — Junior Backend & Cloud Engineer
+# Shir Ben Dror — DriveCoach
+**Junior Backend & Cloud Engineer — Take-Home Assignment**
 
-**Candidate:** Shir (replace with full legal name before submission)
+## Overview
+
+DriveCoach is an event-driven backend application that processes driving lesson telemetry, calculates driving performance metrics, evaluates lessons using versioned rules, and maintains student progress.
+
+The solution is implemented in Python and deployed to AWS using Terraform.
 
 ## Architecture
 
 ```text
-Lesson CSV -> private encrypted S3 (incoming/) -> S3 notification -> Python Lambda
-                                                -> DynamoDB lessons audit table
-                                                -> recompute ordered student states -> DynamoDB students
+Lesson CSV
+    |
+    v
+Private S3 Bucket (incoming/)
+    |
+    v
+S3 Event Notification
+    |
+    v
+AWS Lambda (Python 3.12)
+    |
+    +--> Parse and validate CSV
+    +--> Calculate lesson metrics
+    +--> Evaluate versioned rules
+    +--> Persist lesson evaluation and audit information
+    +--> Replay lessons in chronological order
+               |
+               v
+       DynamoDB Student States
 ```
 
-This is a time-limited, best-effort implementation. AWS deployment was not verified as part of the prepared package. The read API, DLQ and production-grade ordering are not implemented.
+## AWS Deployment
 
-## Deploy / destroy
+The application was successfully deployed and tested in AWS.
 
-Requires AWS CLI credentials for your **own account**, Terraform >=1.5, Python 3.12, and an AWS $10 budget alert set in advance. Budget alerts are not spending limits.
+| Resource | Value |
+|---|---|
+| AWS Region | eu-north-1 |
+| Lambda Function | drivecoach-processor |
+| S3 Bucket | drivecoach-raw-20261016220440220100000001 |
+| Lessons Table | drivecoach-lessons |
+| Students Table | drivecoach-students |
 
-```sh
+**Verified:** Uploading lesson `L-1001.csv` to S3 triggered AWS Lambda, which processed the lesson and stored a `PASS` result with a score of `90.44` in DynamoDB.
+
+The full sample dataset was subsequently uploaded. DynamoDB contained 15 unique lesson records from 16 input CSV files, including a repeated lesson ID.
+
+The final student states in AWS were compared against the local run and matched.
+
+There is no public HTTP API in this implementation. The deployed application is invoked through authenticated S3 uploads.
+
+## Deployment Instructions
+
+Requirements: Python 3.12, AWS CLI, Terraform, and valid AWS credentials.
+
+```bash
 aws sts get-caller-identity
 terraform -chdir=terraform init
 terraform -chdir=terraform validate
+terraform -chdir=terraform plan
 terraform -chdir=terraform apply
-terraform -chdir=terraform output raw_bucket
-# Upload sample data after apply, from repository root:
-# bash scripts/upload_lessons.sh <raw_bucket_value> incoming 1
-# Destroy ONLY after 72 hours following submission:
-terraform -chdir=terraform destroy
+terraform -chdir=terraform output
 ```
 
-**Do not commit state files, keys or credentials.** Local data samples are synthetic but include personal-data-shaped fields; keep repository private. Lambda bundles only IDs/state from students.csv and does not print names, IDs or contact details. AWS credentials must never be sent to a third party.
+The Terraform configuration defaults to `eu-north-1`.
 
-## Local test
+To invoke the deployed system, upload a lesson CSV:
 
-```sh
+```bash
+aws s3 cp sample_data/lessons/CAR-01/2026-10-05/L-1001.csv \
+s3://drivecoach-raw-20261016220440220100000001/incoming/L-1001.csv \
+--region eu-north-1
+```
+
+To inspect a processed lesson or student state, use the AWS Console or AWS CLI to read the relevant DynamoDB table.
+
+## Local Testing
+
+```bash
 python -m unittest discover -s tests -v
 python src/main.py
 ```
 
-`results.json` is generated locally (not committed), containing audit records and student final states.
+The local application produces `results.json`, including lesson evaluations and final student states.
 
-## Required item 8 — Local results (NOT verified in AWS)
+## Lesson Evaluation Results
+
+The following results were generated locally using the supplied dataset.
 
 | Lesson | Student | Result |
 |---|---|---|
@@ -59,38 +107,69 @@ python src/main.py
 | L-1011 | S-003 | PASS |
 | L-1015 | S-004 | FAIL |
 
-### Final student states (local)
+The input contains 16 CSV files and 15 unique lesson IDs because `L-1007_retry1.csv` references the same lesson ID as `L-1007.csv`.
 
-| Student | Program | Completed | Reviews | Status | Final score |
+## Final Student States
+
+These final states were verified against DynamoDB.
+
+| Student | Program | Completed | Reviews | Status | Final Score |
 |---|---|---:|---:|---|---:|
 | S-001 | STANDARD | 12 | 0 | COMPLETED | 89.73 |
-| S-002 | STANDARD | 5 | 2 | ACTIVE | - |
-| S-003 | EXTENDED | 7 | 0 | ACTIVE | - |
-| S-004 | EXTENDED | 10 | 2 | INSTRUCTOR_REVIEW | - |
+| S-002 | STANDARD | 5 | 2 | ACTIVE | — |
+| S-003 | EXTENDED | 7 | 0 | ACTIVE | — |
+| S-004 | EXTENDED | 10 | 2 | INSTRUCTOR_REVIEW | — |
 
-## Assumptions and tradeoffs
+## Rules and State Management
 
-- Duplicate uploads with the same `lesson_id` are de-duplicated. Conflicting timestamps for the same ID raise an error.
-- All 16 uploaded files correspond to 15 unique lesson IDs; retry is counted once.
-- Lessons are evaluated in UTC `started_at` order. Lambda reserved concurrency 1 reduces interleaving; state is replayed after each upload to handle late records. It is not a robust event-sourced distributed design.
-- Rules v1 are bundled into the Lambda artifact; changing rules currently requires a new deployment.
-- The recorded result of a REVIEW beyond `max_reviews` becomes FAIL for student transitions; both original result and treated result are kept in audit.
-- `final_score` uses REGULAR PASS lessons ingested by this system only, as required; earlier completed lessons do not have score data.
-- CSV parsing validates headers and metadata, but not all possible corrupt or contradictory measurement patterns.
-- Terraform provisions a private S3 bucket, Lambda, DynamoDB tables and three-day log retention. DynamoDB PAY_PER_REQUEST and AWS Lambda/S3 usage may incur costs.
-- No read API endpoint is provided, so the submission email should say the AWS S3 bucket and Lambda name rather than claim a live API URL.
+Lessons are evaluated using the bundled `rules_v1.json` configuration.
 
-## Existing starter kit issues identified
+The application supports PASS, REVIEW, FAIL and INVALID evaluations. Student progression depends on the current program, lesson type, review count and lesson evaluation.
 
-- Public S3 read policy and disabled block-public-access controls.
-- Overly permissive IAM `Action: *` and `Resource: *`.
-- Hard-coded instructor API key stored as a normal SSM String. Removed rather than deploying unused insecure credentials.
-- Upload script includes a repeated file (`L-1007_retry1.csv`); idempotency is required.
+During each processing invocation, stored lessons are sorted by `started_at` and student states are recomputed from the initial dataset.
+
+## Security
+
+The infrastructure uses private S3 storage, server-side encryption, IAM permissions scoped to the application, and DynamoDB for persistent state.
+
+AWS credentials are not included in the repository.
+
+Terraform state files, temporary local files and credentials must not be committed to GitHub.
 
 ## CI/CD
 
-GitHub Actions runs unit tests on main. Deploy runs if GitHub Actions variable `AWS_ROLE_ARN` is configured with a properly scoped AWS OIDC role. Otherwise deployment is intentionally skipped rather than using stored access keys.
+The repository contains a GitHub Actions workflow, `.github/workflows/ci.yml`.
 
-## With another week
+- CI runs Python unit tests on pushes to `main`.
+- CD defines a Terraform deployment job.
+- Automatic deployment requires an appropriately configured AWS OIDC role and the GitHub Actions variable `AWS_ROLE_ARN`.
+- Automated CD has not yet been verified end to end.
 
-Implement a proper ordered per-student queue with idempotent transactions, an SQS DLQ/replay mechanism, CloudWatch alarms, an authenticated read API, protected workflow approvals and independent integration tests using a test AWS account. Add changeable rules versions from S3/SSM with effective dates and signed audit entries.
+The AWS deployment was performed manually using Terraform.
+
+## Assumptions and Limitations
+
+- Repeated lesson IDs are stored as one lesson record.
+- Conflicting timestamps for the same lesson ID cause an error.
+- Historical lessons are replayed in chronological order.
+- Concurrent Lambda executions can still race when updating shared state. A per-student queue, transactional versioning or another serialization mechanism is recommended for production.
+- Some existing student-state numeric values are represented as strings; numeric normalization would improve consistency.
+- Rules are bundled into the deployment artifact and require redeployment to change.
+- The implementation does not provide an authenticated read API, dead-letter queue or full production monitoring.
+- `final_score` uses the available regular passed lessons rather than inventing scores for lessons completed before the sample dataset.
+
+## Improvements With Additional Time
+
+I would prioritize stronger concurrency control, transactional state updates, an SQS dead-letter queue, integration tests, CloudWatch alarms, an authenticated read API, externally managed rule versions and a verified GitHub Actions deployment pipeline.
+
+## Cleanup
+
+The AWS deployment should remain available for the requested 72-hour evaluation period following submission.
+
+After that period, resources can be removed with:
+
+```bash
+terraform -chdir=terraform destroy
+```
+
+AWS resources may incur charges while running. Budget monitoring should remain enabled until all resources are removed.
