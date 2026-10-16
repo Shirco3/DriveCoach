@@ -1,0 +1,54 @@
+{
+  "version": "v1",
+  "effective_from": "2026-10-01",
+  "min_duration_min": 15,
+  "fail_if_any": [
+    {
+      "metric": "pct_time_over_limit",
+      "op": ">",
+      "value": 15
+    },
+    {
+      "metric": "harsh_brake_count",
+      "op": ">=",
+      "value": 6
+    },
+    {
+      "metric": "max_lateral_g",
+      "op": ">",
+      "value": 0.65
+    }
+  ],
+  "review_if_any": [
+    {
+      "metric": "pct_time_over_limit",
+      "op": ">",
+      "value": 5
+    },
+    {
+      "metric": "harsh_brake_count",
+      "op": ">=",
+      "value": 3
+    },
+    {
+      "metric": "harsh_accel_count",
+      "op": ">=",
+      "value": 4
+    },
+    {
+      "metric": "sharp_turn_count",
+      "op": ">=",
+      "value": 3
+    }
+  ],
+  "programs": {
+    "STANDARD": {
+      "lessons": 12,
+      "max_reviews": 2
+    },
+    "EXTENDED": {
+      "lessons": 18,
+      "max_reviews": 2
+    }
+  }
+}

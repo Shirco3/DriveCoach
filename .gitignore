@@ -1,0 +1,8 @@
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfstate*
+**/lambda_build.zip
+__pycache__/
+*.pyc
+results.json
+.env

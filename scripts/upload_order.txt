@@ -1,0 +1,16 @@
+sample_data/lessons/CAR-01/2026-10-05/L-1001.csv
+sample_data/lessons/CAR-02/2026-10-05/L-1004.csv
+sample_data/lessons/CAR-03/2026-10-05/L-1009.csv
+sample_data/lessons/CAR-01/2026-10-05/L-1012.csv
+sample_data/lessons/CAR-01/2026-10-06/L-1002.csv
+sample_data/lessons/CAR-02/2026-10-06/L-1005.csv
+sample_data/lessons/CAR-03/2026-10-06/L-1010.csv
+sample_data/lessons/CAR-01/2026-10-06/L-1013.csv
+sample_data/lessons/CAR-02/2026-10-06/L-1006.csv
+sample_data/lessons/CAR-01/2026-10-07/L-1003.csv
+sample_data/lessons/CAR-02/2026-10-07/L-1007.csv
+sample_data/lessons/CAR-02/2026-10-07/L-1007_retry1.csv
+sample_data/lessons/CAR-01/2026-10-07/L-1014.csv
+sample_data/lessons/CAR-02/2026-10-08/L-1008.csv
+sample_data/lessons/CAR-03/2026-10-08/L-1011.csv
+sample_data/lessons/CAR-01/2026-10-08/L-1015.csv

@@ -1,0 +1,5 @@
+student_id,full_name,national_id,date_of_birth,phone,email,program,lessons_completed,review_count,next_lesson_type,status
+S-001,Noa Sample,900000011,2007-03-14,+972-50-000-0011,noa.sample@example.com,STANDARD,9,0,REGULAR,ACTIVE
+S-002,Daniel Testman,900000029,2006-11-02,+972-50-000-0029,daniel.testman@example.com,STANDARD,4,0,REGULAR,ACTIVE
+S-003,Maya Placeholder,900000037,2005-07-21,+1-305-555-0137,maya.placeholder@example.com,STANDARD,6,1,REGULAR,ACTIVE
+S-004,Yoni Example,900000045,2004-01-30,+972-50-000-0045,yoni.example@example.com,EXTENDED,10,1,REGULAR,ACTIVE
