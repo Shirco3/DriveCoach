@@ -6,3 +6,12 @@ __pycache__/
 *.pyc
 results.json
 .env
+key.json
+names.json
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+.terraform.lock.hcl
+__pycache__/

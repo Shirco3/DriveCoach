@@ -78,7 +78,7 @@ resource "aws_lambda_function" "processor" {
   handler = "lambda_handler.lambda_handler"
   timeout = 120
   memory_size = 512
-  reserved_concurrent_executions = 1
+  
   environment {
     variables = {
       LESSONS_TABLE = aws_dynamodb_table.lessons.name
