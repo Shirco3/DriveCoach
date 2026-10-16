@@ -1,35 +1,51 @@
-# Shir Ben Dror — DriveCoach
-**Junior Backend & Cloud Engineer — Take-Home Assignment**
+
+# DriveCoach — Driving Lesson Evaluation System
+
+**Developed by:** Shir Ben Dror  
+**Email:** shir2861999@gmail.com  
+**Role:** Junior Backend & Cloud Engineer — Take-Home Assignment
 
 ## Overview
 
-DriveCoach is an event-driven backend application that processes driving lesson telemetry, calculates driving performance metrics, evaluates lessons using versioned rules, and maintains student progress.
+DriveCoach is an event-driven backend application that processes driving lesson telemetry data, calculates driving performance metrics, evaluates lessons using configurable rules, and maintains student progress.
 
-The solution is implemented in Python and deployed to AWS using Terraform.
+The system is implemented in Python and deployed to AWS using Terraform.
 
 ## Architecture
 
 ```text
-Lesson CSV
-    |
-    v
-Private S3 Bucket (incoming/)
-    |
-    v
+Driving Lesson CSV
+        |
+        v
+Private Amazon S3 Bucket
+        |
+        v
 S3 Event Notification
-    |
-    v
+        |
+        v
 AWS Lambda (Python 3.12)
-    |
-    +--> Parse and validate CSV
-    +--> Calculate lesson metrics
-    +--> Evaluate versioned rules
-    +--> Persist lesson evaluation and audit information
-    +--> Replay lessons in chronological order
-               |
-               v
-       DynamoDB Student States
+        |
+        +--> Parse and validate CSV
+        +--> Calculate driving metrics
+        +--> Evaluate versioned rules
+        +--> Save lesson audit records
+        +--> Recompute student states
+                    |
+                    v
+             Amazon DynamoDB
+             - Lessons Table
+             - Students Table
 ```
+
+## Technology Stack
+
+- Python 3.12 — Backend processing
+- Amazon S3 — Lesson CSV storage
+- AWS Lambda — Event-driven processing
+- Amazon DynamoDB — Lesson records and student states
+- Terraform — Infrastructure as Code
+- GitHub Actions — Automated testing and deployment configuration
+- AWS CloudWatch — Lambda execution logs
 
 ## AWS Deployment
 
@@ -43,20 +59,48 @@ The application was successfully deployed and tested in AWS.
 | Lessons Table | drivecoach-lessons |
 | Students Table | drivecoach-students |
 
-**Verified:** Uploading lesson `L-1001.csv` to S3 triggered AWS Lambda, which processed the lesson and stored a `PASS` result with a score of `90.44` in DynamoDB.
+### Deployment Verification
 
-The full sample dataset was subsequently uploaded. DynamoDB contained 15 unique lesson records from 16 input CSV files, including a repeated lesson ID.
+The deployed application was tested by uploading lesson `L-1001.csv` to S3.
 
-The final student states in AWS were compared against the local run and matched.
+The upload triggered AWS Lambda, which processed the lesson and saved the following result to DynamoDB:
 
-There is no public HTTP API in this implementation. The deployed application is invoked through authenticated S3 uploads.
+- Lesson ID: L-1001
+- Result: PASS
+- Lesson Score: 90.44
+
+The complete sample dataset was subsequently uploaded.
+
+The dataset contains 16 CSV files representing 15 unique lesson IDs, because one lesson appears again as a retry.
+
+The final student states in DynamoDB were compared with the local processing results and matched.
+
+### Live Invocation
+
+The system is triggered by uploading a lesson CSV to the S3 bucket under the `incoming/` prefix.
+
+Example:
+
+```powershell
+aws s3 cp "sample_data/lessons/CAR-01/2026-10-05/L-1001.csv" "s3://drivecoach-raw-20261016220440220100000001/incoming/L-1001.csv" --region eu-north-1
+```
+
+The application does not expose a public HTTP endpoint. AWS permissions are required to upload and inspect data.
 
 ## Deployment Instructions
 
-Requirements: Python 3.12, AWS CLI, Terraform, and valid AWS credentials.
+Requirements:
+
+- Python 3.12
+- AWS CLI
+- Terraform 1.5 or newer
+- AWS credentials with suitable permissions
+
+Run from the repository root:
 
 ```bash
 aws sts get-caller-identity
+
 terraform -chdir=terraform init
 terraform -chdir=terraform validate
 terraform -chdir=terraform plan
@@ -64,32 +108,41 @@ terraform -chdir=terraform apply
 terraform -chdir=terraform output
 ```
 
-The Terraform configuration defaults to `eu-north-1`.
+The Terraform configuration uses the AWS region `eu-north-1`.
 
-To invoke the deployed system, upload a lesson CSV:
+After deployment, upload lesson CSV files to the S3 bucket returned by Terraform.
+
+To remove the infrastructure after the evaluation period:
 
 ```bash
-aws s3 cp sample_data/lessons/CAR-01/2026-10-05/L-1001.csv \
-s3://drivecoach-raw-20261016220440220100000001/incoming/L-1001.csv \
---region eu-north-1
+terraform -chdir=terraform destroy
 ```
 
-To inspect a processed lesson or student state, use the AWS Console or AWS CLI to read the relevant DynamoDB table.
+The deployed AWS resources should remain available for at least 72 hours after submission.
 
-## Local Testing
+## Local Execution and Testing
+
+Run the unit tests:
 
 ```bash
 python -m unittest discover -s tests -v
+```
+
+Run local processing:
+
+```bash
 python src/main.py
 ```
 
-The local application produces `results.json`, including lesson evaluations and final student states.
+The application generates `results.json` with lesson evaluations and final student states.
+
+All four included unit tests passed during local verification.
 
 ## Lesson Evaluation Results
 
-The following results were generated locally using the supplied dataset.
+The following results were generated locally from the provided dataset.
 
-| Lesson | Student | Result |
+| Lesson ID | Student ID | Result |
 |---|---|---|
 | L-1001 | S-001 | PASS |
 | L-1004 | S-002 | PASS |
@@ -107,69 +160,100 @@ The following results were generated locally using the supplied dataset.
 | L-1011 | S-003 | PASS |
 | L-1015 | S-004 | FAIL |
 
-The input contains 16 CSV files and 15 unique lesson IDs because `L-1007_retry1.csv` references the same lesson ID as `L-1007.csv`.
+The duplicate file `L-1007_retry1.csv` uses the same lesson ID as `L-1007.csv` and does not create an additional unique lesson record.
 
 ## Final Student States
 
-These final states were verified against DynamoDB.
+The following states were calculated locally and compared with the deployed DynamoDB data.
 
-| Student | Program | Completed | Reviews | Status | Final Score |
+| Student | Program | Completed Lessons | Reviews | Status | Final Score |
 |---|---|---:|---:|---|---:|
 | S-001 | STANDARD | 12 | 0 | COMPLETED | 89.73 |
 | S-002 | STANDARD | 5 | 2 | ACTIVE | — |
 | S-003 | EXTENDED | 7 | 0 | ACTIVE | — |
 | S-004 | EXTENDED | 10 | 2 | INSTRUCTOR_REVIEW | — |
 
-## Rules and State Management
+## Rules and Student State Management
 
-Lessons are evaluated using the bundled `rules_v1.json` configuration.
+Lesson evaluations are performed using the bundled `rules_v1.json` configuration.
 
-The application supports PASS, REVIEW, FAIL and INVALID evaluations. Student progression depends on the current program, lesson type, review count and lesson evaluation.
+Supported evaluation results:
 
-During each processing invocation, stored lessons are sorted by `started_at` and student states are recomputed from the initial dataset.
+- PASS
+- REVIEW
+- FAIL
+- INVALID
+
+Student progression depends on the current training program, lesson type, review count, and evaluation result.
+
+After a lesson is stored, the application retrieves existing lessons, sorts them by `started_at`, and recomputes student states from the initial student dataset.
+
+Duplicate lesson IDs are stored as one lesson record. A duplicate ID with a conflicting start timestamp raises an error.
+
+Both the original lesson evaluation and the result used for student-state transitions are recorded.
 
 ## Security
 
-The infrastructure uses private S3 storage, server-side encryption, IAM permissions scoped to the application, and DynamoDB for persistent state.
+The infrastructure uses:
 
-AWS credentials are not included in the repository.
+- Private Amazon S3 storage
+- S3 server-side encryption
+- IAM permissions scoped to the application
+- DynamoDB for persistent state
+- CloudWatch execution logs
 
-Terraform state files, temporary local files and credentials must not be committed to GitHub.
+AWS credentials and local Terraform state files must not be committed to GitHub.
+
+The repository is private.
 
 ## CI/CD
 
-The repository contains a GitHub Actions workflow, `.github/workflows/ci.yml`.
+The project includes a GitHub Actions workflow:
 
-- CI runs Python unit tests on pushes to `main`.
-- CD defines a Terraform deployment job.
-- Automatic deployment requires an appropriately configured AWS OIDC role and the GitHub Actions variable `AWS_ROLE_ARN`.
-- Automated CD has not yet been verified end to end.
+`.github/workflows/ci.yml`
 
-The AWS deployment was performed manually using Terraform.
+The workflow performs automated Python unit tests when code is pushed to the `main` branch.
+
+The deployment job is configured to use AWS OIDC authentication and requires the `AWS_ROLE_ARN` GitHub Actions variable.
+
+Automated deployment through GitHub Actions has not been verified end to end.
+
+The working AWS environment was deployed manually using Terraform.
 
 ## Assumptions and Limitations
 
-- Repeated lesson IDs are stored as one lesson record.
-- Conflicting timestamps for the same lesson ID cause an error.
-- Historical lessons are replayed in chronological order.
-- Concurrent Lambda executions can still race when updating shared state. A per-student queue, transactional versioning or another serialization mechanism is recommended for production.
-- Some existing student-state numeric values are represented as strings; numeric normalization would improve consistency.
-- Rules are bundled into the deployment artifact and require redeployment to change.
-- The implementation does not provide an authenticated read API, dead-letter queue or full production monitoring.
-- `final_score` uses the available regular passed lessons rather than inventing scores for lessons completed before the sample dataset.
+- The supplied 16 CSV files represent 15 unique lesson IDs.
+- Duplicate lesson IDs are processed as a single stored lesson.
+- Lessons are replayed chronologically according to their start time.
+- Concurrent Lambda executions may cause competing student-state updates. Additional synchronization would be required for production use.
+- Versioned rules are bundled with the Lambda deployment and currently require redeployment when changed.
+- The final score is based on available passed regular lessons; historical lessons without telemetry are not assigned invented scores.
+- Some initial student-state numeric fields are represented as strings rather than numeric values.
+- The implementation does not expose a public read API.
+- A dead-letter queue, advanced monitoring, and production-grade concurrency control are not included.
+- AWS resources may incur charges while deployed.
 
 ## Improvements With Additional Time
 
-I would prioritize stronger concurrency control, transactional state updates, an SQS dead-letter queue, integration tests, CloudWatch alarms, an authenticated read API, externally managed rule versions and a verified GitHub Actions deployment pipeline.
+The next improvements would include:
+
+- Per-student ordered processing using SQS
+- Stronger idempotency and transactional state updates
+- Dead-letter queue and replay support
+- CloudWatch monitoring and alarms
+- Authenticated read API
+- Externally managed, versioned rule configurations
+- Additional integration tests
+- Fully verified automated deployment through GitHub Actions
 
 ## Cleanup
 
-The AWS deployment should remain available for the requested 72-hour evaluation period following submission.
+Keep the deployed infrastructure running for at least 72 hours after submitting the assignment.
 
-After that period, resources can be removed with:
+After the evaluation period, destroy the infrastructure:
 
 ```bash
 terraform -chdir=terraform destroy
 ```
 
-AWS resources may incur charges while running. Budget monitoring should remain enabled until all resources are removed.
+Verify that AWS resources were removed and continue monitoring the account for unexpected charges.
