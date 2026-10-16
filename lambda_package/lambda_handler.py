@@ -25,7 +25,7 @@ def scan_all(table):
     return data
 
 def recompute(lessons,students_table,rules):
-    # Reserved Lambda concurrency of 1 serializes updates. Rebuild state in lesson-start order.
+    # Rebuild student states in chronological lesson order. Concurrent invocations require additional coordination.
     students=load_students('students.csv')
     scores={sid:[] for sid in students}
     for item in sorted(lessons,key=lambda d:(d['started_at'],d['lesson_id'])):
