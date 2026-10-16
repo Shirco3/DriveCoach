@@ -4,7 +4,7 @@ variable "region" {
 }
 variable "owner" {
   type = string
-  default = "candidate"
+  default = "shir-ben-dror"
 }
 variable "project_name" {
   type = string
